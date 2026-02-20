@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WHY — What Happened Yesterday</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;1,300&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="header-inner">
+      <div class="header-date" id="current-date">—</div>
+      <div class="masthead">
+        <h1>WHY</h1>
+        <div class="sub">What Happened Yesterday</div>
+      </div>
+      <div class="header-actions">
+        <button class="auth-btn" title="Login — coming soon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+          login
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="status-bar">
+    <span><span class="live-dot"></span>live</span>
+    <span class="status-edition" id="date-value">—</span>
+    <span id="story-count">—</span>
+    <button class="refresh-btn" onclick="loadNews(true)">↻ refresh</button>
+  </div>
+
+  <nav class="topic-nav" id="topic-nav"></nav>
+
+  <main id="main-content">
+    <div class="state-msg">
+      <div class="state-glyph">◎</div>
+      <div>fetching yesterday's news...</div>
+      <div class="loading-line"></div>
+    </div>
+  </main>
+
+  <footer>
+    <span>WHY · market intelligence</span>
+    <span id="gen-time">—</span>
+  </footer>
+
+</div>
+
+<script>
+  const API_URL = "/api/news";
+  let newsData  = null;
+
+  function formatTime(str) {
+    if (!str) return "";
+    try {
+      const diff = Math.floor((Date.now() - new Date(str)) / 60000);
+      if (diff < 60)   return `${diff}m ago`;
+      if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
+      return new Date(str).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    } catch { return ""; }
+  }
+
+  function renderTabs(topics) {
+    document.getElementById("topic-nav").innerHTML = topics.map((t, i) =>
+      `<button class="topic-tab ${i === 0 ? "active" : ""}" onclick="switchTopic(${i})">${t.label}</button>`
+    ).join("");
+  }
+
+  function renderSection(topic) {
+    const arts = topic.articles || [];
+    if (!arts.length) return `
+      <div class="state-msg">
+        <div class="state-glyph">◌</div>
+        <div>no stories found for ${topic.label}</div>
+      </div>`;
+
+    const items = arts.map(a => `
+      <a class="news-item" href="${a.link}" target="_blank" rel="noopener">
+        <div class="news-title">${a.title}</div>
+        <div class="news-meta">
+          <span class="news-source">${a.source}</span>
+          <span class="meta-sep">·</span>
+          <span>${formatTime(a.published)}</span>
+        </div>
+        <div class="sentiment pending">— reddit</div>
+      </a>`).join("");
+
+    return `
+      <div class="section-meta">
+        <span class="section-label">${topic.label}</span>
+        <span class="section-count">${arts.length} stories</span>
+      </div>
+      <div class="news-list">${items}</div>`;
+  }
+
+  function renderAll(data) {
+    document.getElementById("main-content").innerHTML = data.topics.map((t, i) =>
+      `<section class="topic-section ${i === 0 ? "active" : ""}" id="sec-${i}">
+        ${renderSection(t)}
+      </section>`
+    ).join("");
+
+    document.getElementById("current-date").textContent =
+      new Date().toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+    document.getElementById("date-value").textContent = data.date_label || "Yesterday";
+    const total = data.topics.reduce((s, t) => s + (t.articles?.length || 0), 0);
+    document.getElementById("story-count").textContent = `${total} stories`;
+    if (data.generated_at) {
+      const t = new Date(data.generated_at);
+      document.getElementById("gen-time").textContent =
+        `updated ${t.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
+    }
+  }
+
+  function switchTopic(idx) {
+    document.querySelectorAll(".topic-tab").forEach((t, i)  => t.classList.toggle("active", i === idx));
+    document.querySelectorAll(".topic-section").forEach((s, i) => s.classList.toggle("active", i === idx));
+  }
+
+  async function loadNews(force = false) {
+    if (!force && newsData) { renderTabs(newsData.topics); renderAll(newsData); return; }
+
+    document.getElementById("main-content").innerHTML = `
+      <div class="state-msg">
+        <div class="state-glyph">◎</div>
+        <div>fetching yesterday's news...</div>
+        <div class="loading-line"></div>
+      </div>`;
+    document.getElementById("topic-nav").innerHTML = "";
+
+    try {
+      const res = await fetch(API_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      newsData = await res.json();
+      renderTabs(newsData.topics);
+      renderAll(newsData);
+    } catch (err) {
+      document.getElementById("main-content").innerHTML = `
+        <div class="state-msg">
+          <div class="state-glyph">◌</div>
+          <div>backend offline &nbsp;·&nbsp; run <code>python backend/app.py</code></div>
+          <div class="error-detail">${err}</div>
+        </div>`;
+    }
+  }
+
+  loadNews();
+</script>
+</body>
+</html>

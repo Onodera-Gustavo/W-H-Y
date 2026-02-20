@@ -1,0 +1,457 @@
+/* ============================================================
+   WHY — style.css
+   Organized sections:
+   1. Variables
+   2. Reset & Base
+   3. Layout
+   4. Header
+   5. Status Bar
+   6. Topic Nav
+   7. Main & Sections
+   8. News List & Cards
+   9. Sentiment Badge
+   10. States (loading, error, empty)
+   11. Footer
+   12. Animations
+   ============================================================ */
+
+
+/* ── 1. Variables ─────────────────────────────────────────── */
+
+:root {
+  --bg:        #fafaf8;
+  --bg-hover:  #f0f0ed;
+  --ink:       #181816;
+  --ink-muted: #8a8880;
+  --ink-dim:   #d0cfc8;
+  --accent:    #181816;
+  --positive:  #2d7a4a;
+  --negative:  #a03428;
+  --neutral:   #8a8880;
+  --border:    1px solid #e0dfd8;
+  --mono:      'IBM Plex Mono', monospace;
+  --sans:      'IBM Plex Sans', sans-serif;
+}
+
+
+/* ── 2. Reset & Base ──────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+
+/* ── 3. Layout ────────────────────────────────────────────── */
+
+.wrap {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+
+
+/* ── 4. Header ────────────────────────────────────────────── */
+
+header {
+  border-bottom: var(--border);
+  padding: 22px 0 16px;
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-date {
+  font-size: 11px;
+  color: var(--ink-muted);
+  letter-spacing: 0.04em;
+  min-width: 120px;
+}
+
+/* Masthead — WHY title */
+.masthead {
+  text-align: center;
+}
+
+.masthead h1 {
+  font-family: var(--mono);
+  font-size: clamp(72px, 12vw, 120px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 2.5px var(--ink);
+  filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.06));
+  transition: opacity 0.2s;
+}
+
+.masthead h1:hover {
+  opacity: 0.55;
+}
+
+.masthead .sub {
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-top: 6px;
+}
+
+/* Login button */
+.header-actions {
+  min-width: 120px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.auth-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+  border: var(--border);
+  padding: 5px 10px;
+  cursor: pointer;
+  background: none;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.auth-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink-muted);
+}
+
+.auth-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+
+/* ── 5. Status Bar ────────────────────────────────────────── */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 7px 0;
+  border-bottom: var(--border);
+  font-size: 10px;
+  color: var(--ink-muted);
+  letter-spacing: 0.07em;
+}
+
+.live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--positive);
+  display: inline-block;
+  margin-right: 4px;
+}
+
+.status-edition {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.refresh-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+  cursor: pointer;
+  padding-bottom: 1px;
+  border-bottom: 1px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.refresh-btn:hover {
+  color: var(--ink);
+  border-bottom-color: var(--ink-muted);
+}
+
+
+/* ── 6. Topic Nav ─────────────────────────────────────────── */
+
+.topic-nav {
+  display: flex;
+  gap: 28px;
+  padding: 13px 0;
+  border-bottom: var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.topic-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.topic-tab {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0 0 2px;
+  border-bottom: 1px solid transparent;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.topic-tab:hover {
+  color: var(--ink);
+}
+
+.topic-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+
+/* ── 7. Main & Sections ───────────────────────────────────── */
+
+main {
+  padding: 24px 0 80px;
+}
+
+.topic-section {
+  display: none;
+}
+
+.topic-section.active {
+  display: block;
+}
+
+.section-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.section-label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.section-count {
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+
+
+/* ── 8. News List & Cards ─────────────────────────────────── */
+
+.news-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.news-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 20px;
+  row-gap: 5px;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: var(--border);
+  cursor: pointer;
+  position: relative;
+  opacity: 0;
+  animation: rise 0.3s ease forwards;
+}
+
+/* hover background bleeds edge-to-edge past .wrap padding */
+.news-item::before {
+  content: '';
+  position: absolute;
+  left: -28px;
+  right: -28px;
+  top: 0;
+  bottom: 0;
+  background: var(--bg-hover);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.news-item:hover::before {
+  opacity: 1;
+}
+
+.news-title {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ink);
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  z-index: 1;
+}
+
+/* first story gets more visual weight */
+.news-item:first-child {
+  padding: 20px 0;
+}
+
+.news-item:first-child .news-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.news-meta {
+  font-size: 10px;
+  color: var(--ink-muted);
+  letter-spacing: 0.05em;
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.news-source::before {
+  content: '▸ ';
+  color: var(--accent);
+  font-size: 8px;
+}
+
+.meta-sep {
+  color: var(--ink-dim);
+}
+
+
+/* ── 9. Sentiment Badge ───────────────────────────────────── */
+
+.sentiment {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border: 1px solid;
+  white-space: nowrap;
+  position: relative;
+  z-index: 1;
+}
+
+/* States populated later by Reddit NLP module */
+.sentiment.pending  { color: var(--ink-muted); border-color: var(--ink-dim); }
+.sentiment.positive { color: var(--positive);  border-color: var(--positive); }
+.sentiment.negative { color: var(--negative);  border-color: var(--negative); }
+.sentiment.neutral  { color: var(--neutral);   border-color: var(--neutral); }
+
+
+/* ── 10. States ───────────────────────────────────────────── */
+
+.state-msg {
+  padding: 64px 0;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.state-glyph {
+  font-size: 20px;
+  margin-bottom: 12px;
+  opacity: 0.35;
+}
+
+.loading-line {
+  width: 72px;
+  height: 1px;
+  background: var(--ink-dim);
+  margin: 14px auto 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-line::after {
+  content: '';
+  position: absolute;
+  left: -28px;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  background: var(--ink);
+  animation: scan 1.2s ease-in-out infinite;
+}
+
+
+/* ── 11. Footer ───────────────────────────────────────────── */
+
+footer {
+  border-top: var(--border);
+  padding: 13px 0;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--ink-muted);
+  letter-spacing: 0.07em;
+}
+
+
+/* ── 12. Animations ───────────────────────────────────────── */
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes scan {
+  0%   { left: -28px; }
+  100% { left: 100px; }
+}
+
+.news-item:nth-child(1) { animation-delay: 0.04s; }
+.news-item:nth-child(2) { animation-delay: 0.09s; }
+.news-item:nth-child(3) { animation-delay: 0.14s; }
+.news-item:nth-child(4) { animation-delay: 0.19s; }
+.news-item:nth-child(5) { animation-delay: 0.24s; }
+.news-item:nth-child(6) { animation-delay: 0.29s; }
+.news-item:nth-child(7) { animation-delay: 0.34s; }
+.news-item:nth-child(8) { animation-delay: 0.39s; }
+.error-detail { margin-top: 8px; color: var(--ink-dim); font-size: 9px; }
