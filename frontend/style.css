@@ -1,5 +1,5 @@
 /* ============================================================
-   WHY — style.css
+   WHY: style.css
    Organized sections:
    1. Variables
    2. Reset & Base
@@ -9,7 +9,7 @@
    6. Topic Nav
    7. Main & Sections
    8. News List & Cards
-   9. Sentiment Badge
+   9. Sentiment Badge & Trend
    10. States (loading, error, empty)
    11. Footer
    12. Animations
@@ -92,7 +92,7 @@ header {
   min-width: 120px;
 }
 
-/* Masthead — WHY title */
+/* Masthead: WHY title */
 .masthead {
   text-align: center;
 }
@@ -121,14 +121,14 @@ header {
   margin-top: 6px;
 }
 
-/* Login button */
+/* Source link */
 .header-actions {
   min-width: 120px;
   display: flex;
   justify-content: flex-end;
 }
 
-.auth-btn {
+.header-link {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -143,12 +143,12 @@ header {
   transition: color 0.15s, border-color 0.15s;
 }
 
-.auth-btn:hover {
+.header-link:hover {
   color: var(--ink);
   border-color: var(--ink-muted);
 }
 
-.auth-btn svg {
+.header-link svg {
   width: 12px;
   height: 12px;
 }
@@ -258,7 +258,7 @@ main {
 
 .section-meta {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   margin-bottom: 4px;
 }
@@ -361,7 +361,7 @@ main {
 }
 
 
-/* ── 9. Sentiment Badge ───────────────────────────────────── */
+/* ── 9. Sentiment Badge & Trend ───────────────────────────── */
 
 .sentiment {
   grid-column: 2;
@@ -377,11 +377,42 @@ main {
   z-index: 1;
 }
 
-/* States populated later by Reddit NLP module */
+/* Label and score come from the pipeline: FinBERT when available, VADER otherwise */
 .sentiment.pending  { color: var(--ink-muted); border-color: var(--ink-dim); }
 .sentiment.positive { color: var(--positive);  border-color: var(--positive); }
 .sentiment.negative { color: var(--negative);  border-color: var(--negative); }
 .sentiment.neutral  { color: var(--neutral);   border-color: var(--neutral); }
+
+/* 14-day sentiment sparkline next to each topic label */
+.section-trend {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--ink-muted);
+}
+
+.sparkline {
+  display: block;
+  overflow: visible;
+}
+
+.sparkline polyline {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.sparkline circle { fill: var(--ink); }
+.sparkline .zero  { stroke: var(--ink-dim); stroke-width: 1; stroke-dasharray: 2 2; }
+
+.trend-value.positive { color: var(--positive); }
+.trend-value.negative { color: var(--negative); }
+.trend-value.neutral  { color: var(--neutral); }
 
 
 /* ── 10. States ───────────────────────────────────────────── */
@@ -427,7 +458,9 @@ footer {
   border-top: var(--border);
   padding: 13px 0;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
+  gap: 4px 18px;
   font-size: 10px;
   color: var(--ink-muted);
   letter-spacing: 0.07em;

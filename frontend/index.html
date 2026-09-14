@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WHY — What Happened Yesterday</title>
+  <title>WHY: What Happened Yesterday</title>
+  <meta name="description" content="Yesterday's market headlines by topic, with sentiment scored by VADER and FinBERT." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;1,300&display=swap" rel="stylesheet" />
-
-    <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
@@ -15,27 +15,26 @@
 
   <header>
     <div class="header-inner">
-      <div class="header-date" id="current-date">—</div>
+      <div class="header-date" id="current-date">·</div>
       <div class="masthead">
         <h1>WHY</h1>
         <div class="sub">What Happened Yesterday</div>
       </div>
       <div class="header-actions">
-        <button class="auth-btn" title="Login — coming soon">
+        <a class="header-link" href="https://github.com/Onodera-Gustavo/W-H-Y" target="_blank" rel="noopener noreferrer" title="Source code and pipeline on GitHub">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="12" cy="8" r="4"/>
-            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+            <path d="M8 6l-6 6 6 6M16 6l6 6-6 6"/>
           </svg>
-          login
-        </button>
+          source
+        </a>
       </div>
     </div>
   </header>
 
   <div class="status-bar">
-    <span><span class="live-dot"></span>live</span>
-    <span class="status-edition" id="date-value">—</span>
-    <span id="story-count">—</span>
+    <span><span class="live-dot"></span>daily</span>
+    <span class="status-edition" id="date-value">·</span>
+    <span id="story-count">·</span>
     <button class="refresh-btn" onclick="loadNews(true)">↻ refresh</button>
   </div>
 
@@ -44,21 +43,68 @@
   <main id="main-content">
     <div class="state-msg">
       <div class="state-glyph">◎</div>
-      <div>fetching yesterday's news...</div>
+      <div>loading yesterday's edition...</div>
       <div class="loading-line"></div>
     </div>
   </main>
 
   <footer>
-    <span>WHY · market intelligence</span>
-    <span id="gen-time">—</span>
+    <span id="footer-model">WHY · headline sentiment</span>
+    <span id="footer-agreement"></span>
+    <span id="gen-time">·</span>
   </footer>
 
 </div>
 
 <script>
-  const API_URL = "/api/news";
-  let newsData  = null;
+  // The local Flask server answers /api/*. GitHub Pages only has the pipeline's JSON exports.
+  const IS_STATIC = location.hostname.endsWith("github.io");
+  const API    = { news: "/api/news",        trends: "/api/trends",      agreement: "/api/agreement" };
+  const STATIC = { news: "data/latest.json", trends: "data/trends.json", agreement: "data/model_agreement.json" };
+  const MODEL_NAMES = { vader: "VADER", finbert: "FinBERT" };
+  const LABELS = ["positive", "neutral", "negative"];
+
+  let newsData   = null;
+  let trendsData = null;
+
+  // everything that comes from the feed goes through esc() before reaching innerHTML
+  const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ESC[ch]);
+
+  function safeUrl(value) {
+    try {
+      const url = new URL(value, location.href);
+      return url.protocol === "http:" || url.protocol === "https:" ? url.href : "#";
+    } catch { return "#"; }
+  }
+
+  const modelName = model => MODEL_NAMES[model] || model;
+
+  function signed(score) {
+    const n = Number(score);
+    if (!Number.isFinite(n)) return "";
+    const text = Math.abs(n).toFixed(2);
+    return text === "0.00" ? text : (n > 0 ? "+" : "-") + text;
+  }
+
+  // same cut points the pipeline uses for VADER's compound score
+  const labelFor = score => score >= 0.05 ? "positive" : score <= -0.05 ? "negative" : "neutral";
+
+  // API first when served locally, static export as fallback (or only option on Pages)
+  async function getJSON(kind) {
+    const urls = IS_STATIC ? [STATIC[kind]] : [API[kind], STATIC[kind]];
+    let firstError = null;
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (res.ok) return await res.json();
+        firstError ??= new Error(`HTTP ${res.status} on ${url}`);
+      } catch (err) {
+        firstError ??= err;
+      }
+    }
+    throw firstError;
+  }
 
   function formatTime(str) {
     if (!str) return "";
@@ -70,9 +116,59 @@
     } catch { return ""; }
   }
 
+  function badge(article) {
+    const s = article.sentiment;
+    if (!s) return `<div class="sentiment pending">unscored</div>`;
+    const cls = LABELS.includes(s.label) ? s.label : "pending";
+    const detail = Object.entries(article.scores || {})
+      .map(([model, v]) => `${modelName(model)}: ${v.label} ${signed(v.score)}`)
+      .join(" | ");
+    return `<div class="sentiment ${cls}" title="${esc(detail)}">${esc(s.label)} ${signed(s.score)}</div>`;
+  }
+
+  // inline SVG: one polyline per run of consecutive days with data, dashed zero line
+  function sparkline(values) {
+    const W = 84, H = 18, PAD = 2;
+    const known = values.filter(v => v !== null);
+    if (!known.length) return "";
+    const max = Math.max(0.2, ...known.map(Math.abs));
+    const x = i => (PAD + i * (W - 2 * PAD) / Math.max(values.length - 1, 1)).toFixed(1);
+    const y = v => (H / 2 - v / max * (H / 2 - PAD)).toFixed(1);
+    const runs = [];
+    let run = [];
+    values.forEach((v, i) => {
+      if (v === null) { if (run.length) runs.push(run); run = []; }
+      else run.push([x(i), y(v)]);
+    });
+    if (run.length) runs.push(run);
+    const marks = runs.map(r => r.length > 1
+      ? `<polyline points="${r.map(p => p.join(",")).join(" ")}"/>`
+      : `<circle cx="${r[0][0]}" cy="${r[0][1]}" r="1.6"/>`).join("");
+    return `<svg class="sparkline" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">` +
+      `<line class="zero" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/>${marks}</svg>`;
+  }
+
+  function trendFor(label) {
+    const model = trendsData?.primary_model;
+    const topic = (trendsData?.topics || []).find(t => t.label === label);
+    if (!model || !topic) return "";
+    const points = topic.series.map(d => d.sentiment?.[model] ?? null);
+    let total = 0, count = 0;
+    points.forEach(p => { if (p) { total += p.avg * p.n; count += p.n; } });
+    if (!count) return "";
+    const avg = total / count;
+    const days = trendsData.days || topic.series.length;
+    const tip = `${modelName(model)} daily average, last ${days} days, ${count} headlines`;
+    return `
+        <span class="section-trend" title="${esc(tip)}">
+          ${sparkline(points.map(p => p ? p.avg : null))}
+          <span class="trend-value ${labelFor(avg)}">${days}d ${signed(avg)}</span>
+        </span>`;
+  }
+
   function renderTabs(topics) {
     document.getElementById("topic-nav").innerHTML = topics.map((t, i) =>
-      `<button class="topic-tab ${i === 0 ? "active" : ""}" onclick="switchTopic(${i})">${t.label}</button>`
+      `<button class="topic-tab ${i === 0 ? "active" : ""}" onclick="switchTopic(${i})">${esc(t.label)}</button>`
     ).join("");
   }
 
@@ -81,24 +177,25 @@
     if (!arts.length) return `
       <div class="state-msg">
         <div class="state-glyph">◌</div>
-        <div>no stories found for ${topic.label}</div>
+        <div>no stories found for ${esc(topic.label)}</div>
       </div>`;
 
     const items = arts.map(a => `
-      <a class="news-item" href="${a.link}" target="_blank" rel="noopener">
-        <div class="news-title">${a.title}</div>
+      <a class="news-item" href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener noreferrer">
+        <div class="news-title">${esc(a.title)}</div>
         <div class="news-meta">
-          <span class="news-source">${a.source}</span>
+          <span class="news-source">${esc(a.source)}</span>
           <span class="meta-sep">·</span>
-          <span>${formatTime(a.published)}</span>
+          <span>${esc(formatTime(a.published))}</span>
         </div>
-        <div class="sentiment pending">— reddit</div>
+        ${badge(a)}
       </a>`).join("");
 
     return `
       <div class="section-meta">
-        <span class="section-label">${topic.label}</span>
+        <span class="section-label">${esc(topic.label)}</span>
         <span class="section-count">${arts.length} stories</span>
+        ${trendFor(topic.label)}
       </div>
       <div class="news-list">${items}</div>`;
   }
@@ -115,11 +212,25 @@
     document.getElementById("date-value").textContent = data.date_label || "Yesterday";
     const total = data.topics.reduce((s, t) => s + (t.articles?.length || 0), 0);
     document.getElementById("story-count").textContent = `${total} stories`;
+    document.getElementById("footer-model").textContent = data.primary_model
+      ? `WHY · sentiment by ${modelName(data.primary_model)}`
+      : "WHY · headline sentiment";
     if (data.generated_at) {
       const t = new Date(data.generated_at);
       document.getElementById("gen-time").textContent =
-        `updated ${t.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
+        `updated ${t.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
     }
+  }
+
+  async function renderAgreement() {
+    const el = document.getElementById("footer-agreement");
+    el.textContent = "";
+    try {
+      const r = await getJSON("agreement");
+      if (!r.n) return;
+      const [a, b] = r.models.map(modelName);
+      el.textContent = `${a} and ${b} agree on ${Math.round(r.percent_agreement)}% (κ ${r.cohens_kappa.toFixed(2)}, n=${r.n})`;
+    } catch { /* the report is optional */ }
   }
 
   function switchTopic(idx) {
@@ -133,23 +244,25 @@
     document.getElementById("main-content").innerHTML = `
       <div class="state-msg">
         <div class="state-glyph">◎</div>
-        <div>fetching yesterday's news...</div>
+        <div>loading yesterday's edition...</div>
         <div class="loading-line"></div>
       </div>`;
     document.getElementById("topic-nav").innerHTML = "";
 
     try {
-      const res = await fetch(API_URL);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      newsData = await res.json();
+      const [news, trends] = await Promise.allSettled([getJSON("news"), getJSON("trends")]);
+      if (news.status === "rejected") throw news.reason;
+      newsData   = news.value;
+      trendsData = trends.status === "fulfilled" ? trends.value : null;
       renderTabs(newsData.topics);
       renderAll(newsData);
+      renderAgreement();
     } catch (err) {
       document.getElementById("main-content").innerHTML = `
         <div class="state-msg">
           <div class="state-glyph">◌</div>
-          <div>backend offline &nbsp;·&nbsp; run <code>python backend/app.py</code></div>
-          <div class="error-detail">${err}</div>
+          <div>no edition yet &nbsp;·&nbsp; run <code>py -m why run</code></div>
+          <div class="error-detail">${esc(err)}</div>
         </div>`;
     }
   }
