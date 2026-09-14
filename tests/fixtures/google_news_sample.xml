@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Synthetic sample shaped like a Google News RSS search result. Relative to 2026-09-14 09:00 UTC. -->
+<rss xmlns:media="http://search.yahoo.com/mrss/" version="2.0">
+  <channel>
+    <generator>NFE/5.0</generator>
+    <title>"stock market when:1d" - Google News</title>
+    <link>https://news.google.com/search?q=stock+market+when:1d&amp;hl=en-US&amp;gl=US&amp;ceid=US:en</link>
+    <language>en-US</language>
+    <lastBuildDate>Mon, 14 Sep 2026 08:55:00 GMT</lastBuildDate>
+    <description>Google News</description>
+
+    <!-- regular item -->
+    <item>
+      <title>Stocks rally as Fed signals a pause - Reuters</title>
+      <link>https://news.google.com/rss/articles/CBMiTEST0001?oc=5</link>
+      <guid isPermaLink="false">CBMiTEST0001</guid>
+      <pubDate>Mon, 14 Sep 2026 07:30:00 GMT</pubDate>
+      <description>Stocks rally as Fed signals a pause</description>
+      <source url="https://www.reuters.com">Reuters</source>
+    </item>
+
+    <!-- same article, different tracking parameters -->
+    <item>
+      <title>Stocks rally as Fed signals a pause - Reuters</title>
+      <link>https://news.google.com/rss/articles/CBMiTEST0001?oc=6&amp;utm_source=newsletter</link>
+      <guid isPermaLink="false">CBMiTEST0001b</guid>
+      <pubDate>Mon, 14 Sep 2026 07:30:00 GMT</pubDate>
+      <description>Stocks rally as Fed signals a pause</description>
+      <source url="https://www.reuters.com">Reuters</source>
+    </item>
+
+    <!-- headline that itself contains " - " -->
+    <item>
+      <title>S&amp;P 500 - Nasdaq close at record highs - Yahoo Finance</title>
+      <link>https://news.google.com/rss/articles/CBMiTEST0002?oc=5</link>
+      <guid isPermaLink="false">CBMiTEST0002</guid>
+      <pubDate>Sun, 13 Sep 2026 21:00:00 GMT</pubDate>
+      <description>S&amp;P 500 - Nasdaq close at record highs</description>
+      <source url="https://finance.yahoo.com">Yahoo Finance</source>
+    </item>
+
+    <!-- no source element -->
+    <item>
+      <title>Oil slides on weak demand outlook - CNBC</title>
+      <link>https://news.google.com/rss/articles/CBMiTEST0003?oc=5</link>
+      <guid isPermaLink="false">CBMiTEST0003</guid>
+      <pubDate>Sun, 13 Sep 2026 15:00:00 GMT</pubDate>
+      <description>Oil slides on weak demand outlook</description>
+    </item>
+
+    <!-- unparseable date: kept, published_at null -->
+    <item>
+      <title>Markets brace for Friday jobs report - Bloomberg</title>
+      <link>https://news.google.com/rss/articles/CBMiTEST0004?oc=5</link>
+      <guid isPermaLink="false">CBMiTEST0004</guid>
+      <pubDate>not a date</pubDate>
+      <description>Markets brace for Friday jobs report</description>
+      <source url="https://www.bloomberg.com">Bloomberg</source>
+    </item>
+
+    <!-- older than the window: dropped -->
+    <item>
+      <title>Old story from last week - The Wall Street Journal</title>
+      <link>https://news.google.com/rss/articles/CBMiTEST0005?oc=5</link>
+      <guid isPermaLink="false">CBMiTEST0005</guid>
+      <pubDate>Mon, 07 Sep 2026 10:00:00 GMT</pubDate>
+      <description>Old story from last week</description>
+      <source url="https://www.wsj.com">The Wall Street Journal</source>
+    </item>
+  </channel>
+</rss>
