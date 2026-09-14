@@ -1,64 +1,89 @@
 """
-WHY — app.py
-Servidor Flask que expõe as notícias como API JSON.
+WHY: local web server.
 
-Rotas:
-    GET /api/news          → todas as notícias de todos os tópicos
-    GET /api/news/<label>  → notícias de um tópico específico (ex: /api/news/Tesla)
-    GET /                  → serve o index.html
+Serves the frontend and the pipeline's output. It never scrapes; run the pipeline first.
 
-Uso:
-    pip install flask feedparser
-    python app.py
+Routes:
+    GET /                  frontend
+    GET /api/news          latest edition (site/data/latest.json, or built from the Parquet history)
+    GET /api/news/<label>  one topic of the latest edition (e.g. /api/news/Tesla)
+    GET /api/trends        14-day sentiment per topic
+    GET /api/agreement     VADER x FinBERT agreement report
+
+Usage:
+    py -m why run
+    py backend/app.py      (WHY_DEBUG=1 turns on Flask debug mode, PORT changes the port)
 """
 
-from flask import Flask, jsonify, send_from_directory, abort
-from flask_cors import CORS
 import os
 import sys
+from collections.abc import Callable
+from pathlib import Path
 
-# permite importar scraper mesmo rodando de fora do diretório backend
-sys.path.insert(0, os.path.dirname(__file__))
-from scraper import fetch_all, TOPICS
+from flask import Flask, jsonify, send_from_directory
 
-app = Flask(__name__, static_folder="../frontend", static_url_path="")
-CORS(app)  # permite chamadas do frontend durante dev local
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))  # lets `py backend/app.py` import the why package
 
-# cache simples em memória (invalida a cada hora)
-_cache = {"data": None, "fetched_at": None}
+from why import config, export  # noqa: E402
+from why.files import read_json  # noqa: E402
+from why.warehouse import Warehouse  # noqa: E402
 
-
-def _get_data():
-    """Retorna dados do cache ou busca novos."""
-    from datetime import datetime, timedelta, timezone
-    now = datetime.now(timezone.utc)
-    if _cache["data"] is None or (now - _cache["fetched_at"]) > timedelta(hours=1):
-        print("🔄 Buscando notícias frescas...")
-        _cache["data"]       = fetch_all()
-        _cache["fetched_at"] = now
-    return _cache["data"]
+FRONTEND_DIR = ROOT / "frontend"
 
 
-@app.route("/api/news")
-def api_all_news():
-    return jsonify(_get_data())
+def create_app(paths: config.Paths | None = None) -> Flask:
+    paths = paths or config.Paths.from_env()
+    app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path="")
 
+    def load(export_file: Path, build: Callable[[Warehouse], dict]) -> dict | None:
+        """Exported JSON when present, otherwise computed from the local Parquet history."""
+        if export_file.exists():
+            return read_json(export_file)
+        if any((paths.history_dir / "headlines").glob("*.parquet")):
+            with Warehouse(paths.history_dir) as wh:
+                wh.load_history()
+                return build(wh)
+        return None
 
-@app.route("/api/news/<string:label>")
-def api_topic_news(label):
-    data   = _get_data()
-    topics = [t for t in data["topics"] if t["label"].lower() == label.lower()]
-    if not topics:
-        abort(404, description=f"Tópico '{label}' não encontrado.")
-    return jsonify({"generated_at": data["generated_at"], "date_label": data["date_label"], **topics[0]})
+    def no_data():
+        return jsonify(error="no data yet", hint="run: py -m why run"), 503
 
+    @app.get("/api/news")
+    def news():
+        data = load(paths.latest_json, export.build_latest)
+        return jsonify(data) if data else no_data()
 
-@app.route("/")
-def index():
-    frontend_dir = os.path.join(os.path.dirname(__file__), "../frontend")
-    return send_from_directory(frontend_dir, "index.html")
+    @app.get("/api/news/<string:label>")
+    def topic_news(label: str):
+        data = load(paths.latest_json, export.build_latest)
+        if not data:
+            return no_data()
+        for topic in data["topics"]:
+            if topic["label"].lower() == label.lower():
+                meta = {k: data.get(k) for k in ("generated_at", "run_date", "date_label")}
+                return jsonify({**meta, "primary_model": data.get("primary_model"), **topic})
+        return jsonify(error=f"topic {label!r} not found"), 404
+
+    @app.get("/api/trends")
+    def trends():
+        data = load(paths.trends_json, export.build_trends)
+        return jsonify(data) if data else no_data()
+
+    @app.get("/api/agreement")
+    def agreement():
+        data = load(paths.agreement_json, export.build_agreement)
+        return jsonify(data) if data else no_data()
+
+    @app.get("/")
+    def index():
+        return send_from_directory(FRONTEND_DIR, "index.html")
+
+    return app
 
 
 if __name__ == "__main__":
-    print("🚀 WHY server iniciando em http://localhost:5000")
-    app.run(debug=True, port=5000)
+    debug = os.environ.get("WHY_DEBUG", "").lower() in {"1", "true", "yes"}
+    port = int(os.environ.get("PORT", "5000"))
+    print(f"WHY server on http://localhost:{port}")
+    create_app().run(host="127.0.0.1", port=port, debug=debug)
