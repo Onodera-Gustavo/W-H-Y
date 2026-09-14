@@ -1,0 +1,6 @@
+# Runtime: pipeline with VADER, plus the local Flask server
+duckdb>=1.1,<2
+feedparser>=6.0,<7
+flask>=3.0,<4
+requests>=2.31,<3
+vaderSentiment==3.3.2

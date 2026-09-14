@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# WHY pipeline output: raw + history live on the `data` branch, site/data is built by CI
+data/
+site/data/
+*.duckdb
+*.tmp
