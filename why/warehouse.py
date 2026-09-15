@@ -2,7 +2,12 @@
 
 DuckDB runs in memory during a run. The durable copy is Parquet under data/history, one file
 per table per month, loaded at the start and exported at the end. Monthly files keep diffs on
-the `data` branch small: a daily run normally rewrites only the current month."""
+the `data` branch small: a daily run normally rewrites only the current month.
+
+Headlines whose title fails why.quality stay in the tables and in Parquet, but a temporary
+table flags them every time the headlines change. Scoring and every query behind an export
+read the good_headlines view, so a flagged title is never scored and never reaches the site,
+and relaxing a rule brings it back without rewriting anything."""
 
 import os
 from collections.abc import Iterable, Sequence
@@ -11,6 +16,7 @@ from pathlib import Path
 
 import duckdb
 
+from why import quality
 from why.dedup import dedup_key
 from why.sentiment import SentimentResult
 from why.timeutil import parse_iso, to_naive_utc
@@ -40,6 +46,18 @@ CREATE TABLE IF NOT EXISTS sentiment (
 );
 """
 
+# session only: never exported, rebuilt from the titles whenever headlines change
+QUALITY_SCHEMA = """
+CREATE TEMP TABLE low_quality (
+    headline_id VARCHAR PRIMARY KEY,
+    reason      VARCHAR NOT NULL        -- name of the why.quality rule
+);
+
+CREATE TEMP VIEW good_headlines AS
+SELECT * FROM headlines AS h
+WHERE NOT EXISTS (SELECT 1 FROM low_quality AS q WHERE q.headline_id = h.headline_id);
+"""
+
 # table: (month expression for data/history/<table>/YYYY-MM.parquet, sort order inside the file)
 PARTITIONS = {
     "headlines": ("strftime(first_run_date, '%Y-%m')", "first_run_date, topic, headline_id"),
@@ -52,6 +70,8 @@ class Warehouse:
         self.history_dir = Path(history_dir)
         self.con = duckdb.connect(database)
         self.con.execute(SCHEMA)
+        self.con.execute(QUALITY_SCHEMA)
+        self.refresh_quality()
 
     def __enter__(self) -> "Warehouse":
         return self
@@ -64,6 +84,11 @@ class Warehouse:
 
     def count(self, table: str = "headlines") -> int:
         return self.con.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+
+    def _dicts(self, sql: str, params: Sequence | None = None) -> list[dict]:
+        cursor = self.con.execute(sql, params) if params is not None else self.con.execute(sql)
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
 
     # history
 
@@ -79,6 +104,7 @@ class Warehouse:
                     [[str(path) for path in files]],
                 )
             counts[table] = self.count(table)
+        self.refresh_quality()
         return counts
 
     def export_history(self) -> list[Path]:
@@ -104,6 +130,29 @@ class Warehouse:
             for stale in set(folder.glob("*.parquet")) - set(written):
                 stale.unlink()
         return written
+
+    def parquet_files(self) -> int:
+        return sum(1 for table in PARTITIONS for _ in (self.history_dir / table).glob("*.parquet"))
+
+    # quality
+
+    def refresh_quality(self) -> int:
+        """Flag every stored story whose title fails why.quality. Returns stories flagged."""
+        flagged: dict[str, str] = {}
+        for headline_id, title in self.con.execute(
+            "SELECT DISTINCT headline_id, title FROM headlines ORDER BY ALL"
+        ).fetchall():
+            reason = quality.low_quality_reason(title)
+            if reason:
+                flagged.setdefault(headline_id, reason)
+        self.con.execute("DELETE FROM low_quality")
+        if flagged:
+            self.con.executemany("INSERT INTO low_quality VALUES (?, ?)", list(flagged.items()))
+        return len(flagged)
+
+    def low_quality_rows(self) -> int:
+        """Stored headline rows (story x topic) hidden by the quality filter."""
+        return self.count("headlines") - self.count("good_headlines")
 
     # loading
 
@@ -174,15 +223,16 @@ class Warehouse:
             )
             """
         ).fetchone()[0]
+        self.refresh_quality()
         return inserted, seen_again
 
     def pending_sentiment(self, model: str) -> list[tuple[str, str]]:
-        """(headline_id, title) of every stored headline the model has not scored yet. A story
-        filed under two topics is scored once."""
+        """(headline_id, title) of every good headline the model has not scored yet. A story
+        filed under two topics is scored once; a low quality title is not scored at all."""
         return self.con.execute(
             """
             SELECT headline_id, min(title)
-            FROM headlines AS h
+            FROM good_headlines AS h
             WHERE NOT EXISTS (
                 SELECT 1 FROM sentiment AS s WHERE s.headline_id = h.headline_id AND s.model = ?
             )
@@ -203,17 +253,17 @@ class Warehouse:
             self.con.executemany("INSERT INTO sentiment VALUES (?, ?, ?, ?, ?)", rows)
         return len(rows)
 
-    # queries used by the exports
+    # queries used by the exports: all of them read good_headlines
 
     def latest_run_date(self) -> date | None:
-        return self.con.execute("SELECT max(last_run_date) FROM headlines").fetchone()[0]
+        return self.con.execute("SELECT max(last_run_date) FROM good_headlines").fetchone()[0]
 
     def edition(self, run_date: date, limit: int) -> list[dict]:
         """Headlines seen on run_date, newest first, at most `limit` per topic."""
-        cursor = self.con.execute(
+        return self._dicts(
             """
             SELECT topic, headline_id, title, source, link, published_at
-            FROM headlines
+            FROM good_headlines
             WHERE ? BETWEEN first_run_date AND last_run_date
             QUALIFY row_number() OVER (
                 PARTITION BY topic ORDER BY published_at DESC NULLS LAST, headline_id
@@ -222,8 +272,6 @@ class Warehouse:
             """,
             [run_date, limit],
         )
-        columns = [col[0] for col in cursor.description]
-        return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
 
     def scores(self, headline_ids: Sequence[str]) -> dict[str, dict[str, SentimentResult]]:
         if not headline_ids:
@@ -245,7 +293,7 @@ class Warehouse:
         """Headlines per topic per day they were first seen."""
         return self.con.execute(
             """
-            SELECT topic, first_run_date, count(*) FROM headlines
+            SELECT topic, first_run_date, count(*) FROM good_headlines
             WHERE first_run_date BETWEEN ? AND ?
             GROUP BY ALL ORDER BY ALL
             """,
@@ -254,7 +302,7 @@ class Warehouse:
 
     def daily_sentiment(self, start: date, end: date) -> list[dict]:
         """Mean score and label counts per topic, day first seen and model."""
-        cursor = self.con.execute(
+        return self._dicts(
             """
             SELECT h.topic, h.first_run_date AS day, s.model,
                    count(*)                                    AS n,
@@ -262,25 +310,109 @@ class Warehouse:
                    count(*) FILTER (WHERE s.label = 'positive') AS positive,
                    count(*) FILTER (WHERE s.label = 'neutral')  AS neutral,
                    count(*) FILTER (WHERE s.label = 'negative') AS negative
-            FROM headlines AS h
+            FROM good_headlines AS h
             JOIN sentiment AS s USING (headline_id)
             WHERE h.first_run_date BETWEEN ? AND ?
             GROUP BY ALL ORDER BY ALL
             """,
             [start, end],
         )
-        columns = [col[0] for col in cursor.description]
-        return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
 
-    def label_pairs(self, model_a: str, model_b: str) -> list[tuple[str, str, float, float]]:
-        """(label_a, label_b, score_a, score_b) for every headline both models scored."""
-        return self.con.execute(
+    def paired_scores(self, model_a: str, model_b: str) -> list[dict]:
+        """One row per good headline per topic that both models scored, by headline_id and
+        topic: headline_id, topic, title, source, link, last_run_date, label_a, score_a,
+        label_b, score_b."""
+        return self._dicts(
             """
-            SELECT a.label, b.label, a.score, b.score
-            FROM sentiment AS a
-            JOIN sentiment AS b ON a.headline_id = b.headline_id
-            WHERE a.model = ? AND b.model = ?
-            ORDER BY a.headline_id
+            SELECT h.headline_id, h.topic, h.title, h.source, h.link, h.last_run_date,
+                   a.label AS label_a, a.score AS score_a, b.label AS label_b, b.score AS score_b
+            FROM good_headlines AS h
+            JOIN sentiment AS a ON a.headline_id = h.headline_id AND a.model = ?
+            JOIN sentiment AS b ON b.headline_id = h.headline_id AND b.model = ?
+            ORDER BY h.headline_id, h.topic
             """,
             [model_a, model_b],
+        )
+
+    # queries used by status.json
+
+    def history_overview(self) -> dict:
+        """headlines (story x topic rows), first_run_date, last_run_date, run_days."""
+        row = self._dicts(
+            """
+            SELECT count(*) AS headlines,
+                   min(first_run_date) AS first_run_date,
+                   max(last_run_date) AS last_run_date
+            FROM good_headlines
+            """
+        )[0]
+        row["run_days"] = len(self.run_dates())
+        return row
+
+    def run_dates(self) -> list[date]:
+        """Distinct run dates recorded in the history (first or last sighting), ascending."""
+        rows = self.con.execute(
+            """
+            SELECT first_run_date AS d FROM good_headlines
+            UNION
+            SELECT last_run_date FROM good_headlines
+            ORDER BY d
+            """
+        ).fetchall()
+        return [d for (d,) in rows]
+
+    def sentiment_counts(self) -> dict[str, int]:
+        """Good stories scored, per model."""
+        rows = self.con.execute(
+            """
+            SELECT model, count(*) FROM sentiment
+            WHERE headline_id IN (SELECT headline_id FROM good_headlines)
+            GROUP BY model ORDER BY model
+            """
+        ).fetchall()
+        return dict(rows)
+
+    def topic_totals(self) -> dict[str, int]:
+        rows = self.con.execute(
+            "SELECT topic, count(*) FROM good_headlines GROUP BY topic ORDER BY topic"
+        ).fetchall()
+        return dict(rows)
+
+    def daily_activity(self, limit: int) -> list[tuple[date, int, int]]:
+        """(run_date, new_headlines, seen_again) for the most recent `limit` run dates,
+        ascending. New: first seen that day. Seen again: first seen earlier, still seen."""
+        return self.con.execute(
+            """
+            WITH days AS (
+                SELECT d FROM (
+                    SELECT first_run_date AS d FROM good_headlines
+                    UNION
+                    SELECT last_run_date FROM good_headlines
+                )
+                ORDER BY d DESC
+                LIMIT ?
+            )
+            SELECT days.d,
+                   count(h.headline_id) FILTER (WHERE h.first_run_date = days.d),
+                   count(h.headline_id) FILTER (WHERE h.first_run_date < days.d)
+            FROM days
+            LEFT JOIN good_headlines AS h
+                   ON days.d BETWEEN h.first_run_date AND h.last_run_date
+            GROUP BY days.d
+            ORDER BY days.d
+            """,
+            [limit],
+        ).fetchall()
+
+    def top_sources(self, limit: int) -> list[tuple[str, int]]:
+        """Publishers with the most distinct stories, ties by name."""
+        return self.con.execute(
+            """
+            SELECT coalesce(source, 'Unknown') AS source, count(DISTINCT headline_id) AS n
+            FROM good_headlines
+            GROUP BY 1
+            ORDER BY n DESC, source
+            LIMIT ?
+            """,
+            [limit],
         ).fetchall()

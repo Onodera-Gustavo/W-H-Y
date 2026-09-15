@@ -1,16 +1,37 @@
-"""JSON exports read by the frontend: site/data/latest.json, trends.json, model_agreement.json."""
+"""JSON exports read by the frontend, under site/data/:
+
+    latest.json            the daily edition
+    trends.json            daily sentiment and counts per topic, last TREND_DAYS days
+    model_agreement.json   VADER x FinBERT agreement (written by `why compare`)
+    status.json            last run, history size, per topic and per day counts
+
+Every export reads the warehouse's good_headlines view, so low quality titles never appear."""
 
 import statistics
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 
-from why import config, metrics
+from why import __version__, config, metrics
 from why.config import Paths
 from why.files import write_json
 from why.sentiment import LABELS, SentimentResult
 from why.timeutil import to_iso, utc_now
 from why.warehouse import Warehouse
+
+# keys of status.json "run", in order
+RUN_FIELDS = (
+    "run_date",
+    "mode",
+    "raw_records",
+    "inserted",
+    "seen_again",
+    "scored",
+    "failed_topics",
+    "filtered_low_quality",
+    "requests",
+    "backfill",
+)
 
 
 def primary_model(available: Iterable[str]) -> str | None:
@@ -19,6 +40,10 @@ def primary_model(available: Iterable[str]) -> str | None:
         if name in available:
             return name
     return min(available) if available else None
+
+
+def _iso_date(value: date | None) -> str | None:
+    return value.isoformat() if value else None
 
 
 def _article(row: dict, scores: dict[str, SentimentResult]) -> dict:
@@ -60,7 +85,7 @@ def build_latest(
 
     return {
         "generated_at": to_iso(generated_at or utc_now()),
-        "run_date": run_date.isoformat() if run_date else None,
+        "run_date": _iso_date(run_date),
         "date_label": (
             f"Yesterday, {run_date - timedelta(days=1):%b %d}" if run_date else "No edition yet"
         ),
@@ -141,18 +166,70 @@ def _correlation(xs: list[float], ys: list[float]) -> float | None:
         return None
 
 
+def _agreement_numbers(labels_a: list[str], labels_b: list[str]) -> tuple[float, float] | None:
+    if not labels_a:
+        return None
+    return (
+        round(metrics.percent_agreement(labels_a, labels_b), 2),
+        round(metrics.cohens_kappa(labels_a, labels_b), 4),
+    )
+
+
 def build_agreement(
     wh: Warehouse,
     model_a: str = "vader",
     model_b: str = "finbert",
     *,
+    topics: list[dict] = config.TOPICS,
     generated_at: datetime | None = None,
+    max_score_pairs: int = config.AGREEMENT_SCORE_PAIRS,
+    max_disagreements: int = config.AGREEMENT_DISAGREEMENTS,
 ) -> dict:
     """How often two models give the same label to the same headlines. Agreement, not
-    accuracy: there are no human labels here."""
-    pairs = wh.label_pairs(model_a, model_b)
-    labels_a = [p[0] for p in pairs]
-    labels_b = [p[1] for p in pairs]
+    accuracy: there are no human labels here.
+
+    Overall numbers count each story once. by_topic counts a story under every topic it was
+    filed in. score_pairs is ordered by story id, a hash, so a capped list is an unbiased
+    sample. disagreements lists stories with different labels, most recent run date first,
+    then the largest score gap."""
+    rank = {t["label"]: i for i, t in enumerate(topics)}
+    topic_labels: dict[str, tuple[list[str], list[str]]] = defaultdict(lambda: ([], []))
+    stories: dict[str, dict] = {}  # headline_id -> row under its first topic in config order
+    for row in wh.paired_scores(model_a, model_b):
+        labels_a, labels_b = topic_labels[row["topic"]]
+        labels_a.append(row["label_a"])
+        labels_b.append(row["label_b"])
+        current = stories.get(row["headline_id"])
+        order = (rank.get(row["topic"], len(rank)), row["topic"])
+        if current is None or order < (rank.get(current["topic"], len(rank)), current["topic"]):
+            stories[row["headline_id"]] = row
+    pairs = [stories[headline_id] for headline_id in sorted(stories)]
+    labels_a = [p["label_a"] for p in pairs]
+    labels_b = [p["label_b"] for p in pairs]
+
+    by_topic = []
+    extra_topics = sorted(set(topic_labels) - set(rank))
+    for label in [t["label"] for t in topics] + extra_topics:
+        a, b = topic_labels.get(label, ([], []))
+        numbers = _agreement_numbers(a, b)
+        by_topic.append(
+            {
+                "topic": label,
+                "n": len(a),
+                "percent_agreement": numbers[0] if numbers else None,
+                "cohens_kappa": numbers[1] if numbers else None,
+            }
+        )
+
+    differing = [p for p in pairs if p["label_a"] != p["label_b"]]
+    differing.sort(
+        key=lambda p: (
+            -p["last_run_date"].toordinal(),
+            -abs(p["score_b"] - p["score_a"]),
+            p["headline_id"],
+        )
+    )
+
     report = {
         "generated_at": to_iso(generated_at or utc_now()),
         "models": [model_a, model_b],
@@ -163,13 +240,35 @@ def build_agreement(
         "score_correlation": None,
         "confusion_matrix": None,
         "label_distribution": None,
+        "by_topic": by_topic,
+        "score_pairs": [
+            {"a": p["score_a"], "b": p["score_b"], "same": p["label_a"] == p["label_b"]}
+            for p in pairs[:max_score_pairs]
+        ],
+        "disagreements": [
+            {
+                "id": p["headline_id"],
+                "topic": p["topic"],
+                "title": p["title"],
+                "source": p["source"] or "Unknown",
+                "link": p["link"] or "",
+                "run_date": p["last_run_date"].isoformat(),
+                "a": {"label": p["label_a"], "score": p["score_a"]},
+                "b": {"label": p["label_b"], "score": p["score_b"]},
+                "gap": round(p["score_b"] - p["score_a"], 4),
+            }
+            for p in differing[:max_disagreements]
+        ],
     }
-    if not pairs:
+    numbers = _agreement_numbers(labels_a, labels_b)
+    if numbers is None:
         return report
     report.update(
-        percent_agreement=round(metrics.percent_agreement(labels_a, labels_b), 2),
-        cohens_kappa=round(metrics.cohens_kappa(labels_a, labels_b), 4),
-        score_correlation=_correlation([p[2] for p in pairs], [p[3] for p in pairs]),
+        percent_agreement=numbers[0],
+        cohens_kappa=numbers[1],
+        score_correlation=_correlation(
+            [p["score_a"] for p in pairs], [p["score_b"] for p in pairs]
+        ),
         confusion_matrix={
             "rows": model_a,
             "columns": model_b,
@@ -183,8 +282,76 @@ def build_agreement(
     return report
 
 
+def _run_status(run: dict | None) -> dict | None:
+    if run is None:
+        return None
+    defaults = {"failed_topics": [], "scored": {}, "filtered_low_quality": 0, "requests": 0}
+    return {key: run.get(key, defaults.get(key)) for key in RUN_FIELDS}
+
+
+def build_status(
+    wh: Warehouse,
+    *,
+    run: dict | None = None,
+    latest: dict | None = None,
+    topics: list[dict] = config.TOPICS,
+    generated_at: datetime | None = None,
+) -> dict:
+    """Pipeline health for the frontend: the run that wrote the file (null when the status
+    is rebuilt from the history), the size of the history, and per topic, per day and per
+    source counts. Low quality titles are excluded from every count except
+    history.excluded_low_quality."""
+    latest = latest or build_latest(wh, topics=topics, generated_at=generated_at)
+    overview = wh.history_overview()
+    scored = wh.sentiment_counts()
+    totals = wh.topic_totals()
+    edition = {t["label"]: len(t["articles"]) for t in latest["topics"]}
+    return {
+        "generated_at": to_iso(generated_at or utc_now()),
+        "version": __version__,
+        "schedule": config.SCHEDULE,
+        "run": _run_status(run),
+        "history": {
+            "headlines": overview["headlines"],
+            "excluded_low_quality": wh.low_quality_rows(),
+            "sentiment": scored,
+            "first_run_date": _iso_date(overview["first_run_date"]),
+            "last_run_date": _iso_date(overview["last_run_date"]),
+            "run_days": overview["run_days"],
+            "parquet_files": wh.parquet_files(),
+        },
+        "models": {"primary": primary_model(scored), "available": sorted(scored)},
+        "topics": [
+            {
+                "label": t["label"],
+                "query": t["query"],
+                "edition": edition.get(t["label"], 0),
+                "total": totals.get(t["label"], 0),
+            }
+            for t in topics
+        ],
+        "daily": [
+            {"run_date": day.isoformat(), "new_headlines": new, "seen_again": again}
+            for day, new, again in wh.daily_activity(config.STATUS_DAILY_RUNS)
+        ],
+        "sources": [
+            {"source": source, "n": n} for source, n in wh.top_sources(config.STATUS_TOP_SOURCES)
+        ],
+        "config": {"max_per_topic": config.MAX_PER_TOPIC, "trend_days": config.TREND_DAYS},
+    }
+
+
 def write_site_exports(
-    wh: Warehouse, paths: Paths, *, generated_at: datetime | None = None
+    wh: Warehouse,
+    paths: Paths,
+    *,
+    generated_at: datetime | None = None,
+    run: dict | None = None,
 ) -> None:
-    write_json(paths.latest_json, build_latest(wh, generated_at=generated_at))
+    """latest.json, trends.json and status.json. model_agreement.json is written by compare."""
+    latest = build_latest(wh, generated_at=generated_at)
+    write_json(paths.latest_json, latest)
     write_json(paths.trends_json, build_trends(wh, generated_at=generated_at))
+    write_json(
+        paths.status_json, build_status(wh, run=run, latest=latest, generated_at=generated_at)
+    )

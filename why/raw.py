@@ -63,3 +63,28 @@ def read_partition(raw_dir: Path, run_date: date) -> list[dict]:
     for path in sorted(partition_dir(raw_dir, run_date).glob("*.jsonl")):
         records.extend(_read_jsonl(path))
     return records
+
+
+def partition_exists(raw_dir: Path, run_date: date) -> bool:
+    """True when the day already has at least one topic file."""
+    return any(partition_dir(raw_dir, run_date).glob("*.jsonl"))
+
+
+def partition_dates(raw_dir: Path) -> list[date]:
+    """Run dates that have a raw partition, ascending. Folders that are not date=YYYY-MM-DD
+    are ignored."""
+    root = Path(raw_dir)
+    if not root.is_dir():
+        return []
+    dates = []
+    for folder in root.iterdir():
+        name = folder.name.removeprefix("date=")
+        if name == folder.name or not folder.is_dir():
+            continue
+        try:
+            run_date = date.fromisoformat(name)
+        except ValueError:
+            continue
+        if partition_exists(root, run_date):
+            dates.append(run_date)
+    return sorted(dates)

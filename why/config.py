@@ -19,7 +19,16 @@ TOPICS: list[dict[str, str]] = [
 
 MAX_PER_TOPIC = 8  # headlines per topic in the daily edition
 DAYS_BACK = 1  # recency window, relative to collection time
-TREND_DAYS = 14  # window of trends.json
+TREND_DAYS = 30  # window of trends.json (the frontend offers 7, 14 and 30 days)
+
+# status.json and model_agreement.json list sizes
+STATUS_DAILY_RUNS = 30  # most recent run dates listed under "daily"
+STATUS_TOP_SOURCES = 10
+AGREEMENT_SCORE_PAIRS = 2000
+AGREEMENT_DISAGREEMENTS = 60
+
+# cron of .github/workflows/pipeline.yml, echoed in status.json (a test keeps them in sync)
+SCHEDULE = "0 9 * * *"
 
 FEED_URL = "https://news.google.com/rss/search"
 FEED_PARAMS = {"hl": "en-US", "gl": "US", "ceid": "US:en"}
@@ -28,6 +37,11 @@ USER_AGENT = (
     f"W-H-Y/{__version__} (+https://github.com/Onodera-Gustavo/W-H-Y; "
     "daily headline digest, one request per topic)"
 )
+# the feed asking us to stop: the run stops requesting at once instead of trying the next topic
+BLOCKING_STATUS = frozenset({403, 429})
+
+BACKFILL_MAX_DAYS = 60
+BACKFILL_SLEEP = 3.0  # seconds between two backfill requests
 
 DEFAULT_MODELS = ("vader",)
 # the site shows the first of these models that scored a headline
@@ -60,6 +74,10 @@ class Paths:
     @property
     def agreement_json(self) -> Path:
         return self.site_data_dir / "model_agreement.json"
+
+    @property
+    def status_json(self) -> Path:
+        return self.site_data_dir / "status.json"
 
     @classmethod
     def from_env(cls) -> Self:
