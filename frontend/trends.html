@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trends | WHY: What Happened Yesterday</title>
+  <meta name="description" content="Thirty days of headline sentiment per topic: a topics by days heat strip, the daily label mix and one small chart per topic, for FinBERT or VADER.">
+  <link rel="canonical" href="https://onodera-gustavo.github.io/W-H-Y/trends.html">
+  <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121210" media="(prefers-color-scheme: dark)">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="WHY">
+  <meta property="og:title" content="Trends | WHY: What Happened Yesterday">
+  <meta property="og:description" content="Thirty days of headline sentiment per topic, scored by FinBERT and VADER.">
+  <meta property="og:url" content="https://onodera-gustavo.github.io/W-H-Y/trends.html">
+  <meta property="og:image" content="https://onodera-gustavo.github.io/W-H-Y/assets/img/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The WHY masthead above a strip of six topic cells, each with a sentiment meter and a trend line.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Trends | WHY: What Happened Yesterday">
+  <meta name="twitter:description" content="Thirty days of headline sentiment per topic, scored by FinBERT and VADER.">
+  <meta name="twitter:image" content="https://onodera-gustavo.github.io/W-H-Y/assets/img/og.png">
+  <meta name="twitter:image:alt" content="The WHY masthead above a strip of six topic cells, each with a sentiment meter and a trend line.">
+
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+  <link rel="stylesheet" href="assets/css/why.css">
+  <script src="assets/js/theme-boot.js"></script>
+  <script type="module" src="assets/js/trends.js"></script>
+</head>
+
+<body data-page="trends">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" id="site-header">
+    <div class="wrap">
+      <div class="masthead">
+        <p class="masthead-title">WHY</p>
+        <p class="masthead-sub">What Happened Yesterday</p>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="wrap" aria-labelledby="page-title">
+      <div class="page-head">
+        <p class="kicker">The tone over time</p>
+        <h1 class="page-title" id="page-title">Trends</h1>
+        <p class="page-lede">How the tone of each topic's headlines moves from day to day: a heat strip for the whole picture, the mix of labels behind each day, and one small chart per topic.</p>
+        <p class="page-note" id="trends-note">Daily averages from trends.json, grouped by the run date a headline was first seen.</p>
+      </div>
+    </section>
+
+    <div class="wrap">
+      <div class="controls" id="controls" hidden>
+        <div class="control">
+          <span class="control-label" id="window-label">Window</span>
+          <div class="seg" role="group" aria-labelledby="window-label" id="window-group"></div>
+        </div>
+        <div class="control">
+          <span class="control-label" id="model-label">Model</span>
+          <div class="seg" role="group" aria-labelledby="model-label" id="model-group"></div>
+        </div>
+        <p class="controls-note" id="coverage" aria-live="polite"></p>
+      </div>
+
+      <div id="trends-state"></div>
+
+      <section class="block" data-block aria-labelledby="heat-title" hidden>
+        <div class="block-head">
+          <h2 class="block-title" id="heat-title">Topics by day</h2>
+          <p class="block-note" id="heat-note"></p>
+        </div>
+        <div id="heat-legend"></div>
+        <div id="heat"></div>
+      </section>
+
+      <section class="block" data-block aria-labelledby="mix-title" hidden>
+        <div class="block-head">
+          <h2 class="block-title" id="mix-title">Label mix, day by day</h2>
+          <p class="block-note" id="mix-note"></p>
+        </div>
+        <p class="legend">
+          <span class="legend-item"><span class="key is-positive" aria-hidden="true"></span>positive</span>
+          <span class="legend-item"><span class="key is-neutral" aria-hidden="true"></span>neutral</span>
+          <span class="legend-item"><span class="key is-negative" aria-hidden="true"></span>negative</span>
+          <span class="legend-item"><span class="key key-empty" aria-hidden="true"></span>no scored headlines</span>
+        </p>
+        <div id="mixday"></div>
+      </section>
+
+      <section class="block" data-block aria-labelledby="multiples-title" hidden>
+        <div class="block-head">
+          <h2 class="block-title" id="multiples-title">Daily average by topic</h2>
+          <p class="block-note" id="multiples-note"></p>
+        </div>
+        <p class="legend" id="multiples-legend"></p>
+        <div class="multiples" id="multiples"></div>
+      </section>
+    </div>
+
+    <noscript>
+      <div class="wrap">
+        <p class="state-detail">WHY needs JavaScript to draw the trends. The raw export is at <a href="data/trends.json">data/trends.json</a>.</p>
+      </div>
+    </noscript>
+  </main>
+
+  <footer class="site-footer" id="site-footer"></footer>
+</body>
+</html>

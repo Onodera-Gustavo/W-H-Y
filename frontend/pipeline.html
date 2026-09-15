@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pipeline | WHY: What Happened Yesterday</title>
+  <meta name="description" content="How the WHY edition is made: Google News RSS, a quality filter, raw JSONL, DuckDB, VADER and FinBERT, Parquet history on a data branch, and the status of the last run.">
+  <link rel="canonical" href="https://onodera-gustavo.github.io/W-H-Y/pipeline.html">
+  <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121210" media="(prefers-color-scheme: dark)">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="WHY">
+  <meta property="og:title" content="Pipeline | WHY: What Happened Yesterday">
+  <meta property="og:description" content="How the WHY edition is made, and the status of the last run.">
+  <meta property="og:url" content="https://onodera-gustavo.github.io/W-H-Y/pipeline.html">
+  <meta property="og:image" content="https://onodera-gustavo.github.io/W-H-Y/assets/img/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The WHY masthead above a strip of six topic cells, each with a sentiment meter and a trend line.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Pipeline | WHY: What Happened Yesterday">
+  <meta name="twitter:description" content="How the WHY edition is made, and the status of the last run.">
+  <meta name="twitter:image" content="https://onodera-gustavo.github.io/W-H-Y/assets/img/og.png">
+  <meta name="twitter:image:alt" content="The WHY masthead above a strip of six topic cells, each with a sentiment meter and a trend line.">
+
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+  <link rel="stylesheet" href="assets/css/why.css">
+  <script src="assets/js/theme-boot.js"></script>
+  <script type="module" src="assets/js/pipeline.js"></script>
+</head>
+
+<body data-page="pipeline">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" id="site-header">
+    <div class="wrap">
+      <div class="masthead">
+        <p class="masthead-title">WHY</p>
+        <p class="masthead-sub">What Happened Yesterday</p>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="wrap" aria-labelledby="page-title">
+      <div class="page-head">
+        <p class="kicker">How the edition is made</p>
+        <h1 class="page-title" id="page-title">Pipeline</h1>
+        <p class="page-lede">Every morning at 09:00 UTC a GitHub Actions run collects the headlines, keeps template pages out, stores everything on a data branch, scores it with two models and rebuilds this site. This page reads the status report that run leaves behind.</p>
+        <p class="page-note" id="status-note">Read from status.json.</p>
+      </div>
+    </section>
+
+    <div class="wrap">
+      <div id="status-state"></div>
+
+      <section class="block" id="run-block" aria-labelledby="run-title" hidden>
+        <div class="run-grid">
+          <div id="run-card"></div>
+          <div id="run-side"></div>
+        </div>
+      </section>
+
+      <section class="block" aria-labelledby="arch-title">
+        <div class="block-head">
+          <h2 class="block-title" id="arch-title">Architecture</h2>
+          <p class="block-note">Boxes on paper are steps; shaded boxes are files kept on the data branch. No server runs in production: the site is static files.</p>
+        </div>
+        <figure class="diagram">
+          <div class="diagram-scroll">
+            <svg class="diagram-wide" viewBox="0 0 1000 400" role="img" aria-labelledby="arch-w-title arch-w-desc">
+              <title id="arch-w-title">WHY architecture</title>
+              <desc id="arch-w-desc">Google News RSS feeds the ingest step, which also receives the backfill started by hand and applies the quality filter. Ingest writes raw JSONL partitions. DuckDB, in memory, loads the raw partitions and the Parquet history, sends headline titles to VADER and FinBERT and gets their scores back, writes the Parquet history and builds the JSON exports. Raw JSONL and the Parquet history live on the data branch. GitHub Pages serves the exports with this site, and a local Flask server serves the same files plus an API.</desc>
+              <defs>
+                <marker id="dg-arrow-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                  <path class="dg-arrow" d="M0 1 L9 5 L0 9 Z"/>
+                </marker>
+              </defs>
+
+              <rect class="dg-group" x="256" y="262" width="500" height="126" rx="2"/>
+              <text class="dg-group-label" x="270" y="282">DATA BRANCH</text>
+
+              <rect class="dg-node" x="16" y="156" width="200" height="88" rx="2"/>
+              <text class="dg-title" x="30" y="182">GOOGLE NEWS RSS</text>
+              <text class="dg-sub" x="30" y="204">1 request per topic</text>
+              <text class="dg-sub" x="30" y="224">6 topics, once a day</text>
+
+              <rect class="dg-node is-side" x="276" y="24" width="200" height="72" rx="2"/>
+              <text class="dg-title" x="290" y="50">BACKFILL</text>
+              <text class="dg-sub" x="290" y="72">by hand, past days only</text>
+
+              <rect class="dg-node" x="276" y="156" width="200" height="88" rx="2"/>
+              <text class="dg-title" x="290" y="182">INGEST</text>
+              <text class="dg-sub" x="290" y="204">parse, dedup, 8 per topic</text>
+              <rect class="dg-tag" x="290" y="214" width="118" height="20" rx="2"/>
+              <text class="dg-tag-text" x="349" y="228" text-anchor="middle">QUALITY FILTER</text>
+
+              <rect class="dg-node is-store" x="276" y="296" width="200" height="72" rx="2"/>
+              <text class="dg-title" x="290" y="322">RAW JSONL</text>
+              <text class="dg-sub" x="290" y="344">date=YYYY-MM-DD folders</text>
+
+              <rect class="dg-node is-side" x="536" y="24" width="200" height="72" rx="2"/>
+              <text class="dg-title" x="550" y="50">VADER + FINBERT</text>
+              <text class="dg-sub" x="550" y="72">score only what is missing</text>
+
+              <rect class="dg-node" x="536" y="156" width="200" height="88" rx="2"/>
+              <text class="dg-title" x="550" y="182">DUCKDB</text>
+              <text class="dg-sub" x="550" y="204">in memory, plain SQL</text>
+              <text class="dg-sub" x="550" y="224">dedup key, quality flags</text>
+
+              <rect class="dg-node is-store" x="536" y="296" width="200" height="72" rx="2"/>
+              <text class="dg-title" x="550" y="322">PARQUET HISTORY</text>
+              <text class="dg-sub" x="550" y="344">one file per month</text>
+
+              <rect class="dg-node" x="784" y="24" width="200" height="72" rx="2"/>
+              <text class="dg-title" x="798" y="50">GITHUB PAGES</text>
+              <text class="dg-sub" x="798" y="72">this site, static files</text>
+
+              <rect class="dg-node" x="784" y="156" width="200" height="88" rx="2"/>
+              <text class="dg-title" x="798" y="182">JSON EXPORTS</text>
+              <text class="dg-sub" x="798" y="204">latest, trends,</text>
+              <text class="dg-sub" x="798" y="224">model agreement, status</text>
+
+              <rect class="dg-node" x="784" y="296" width="200" height="72" rx="2"/>
+              <text class="dg-title" x="798" y="322">FLASK, LOCAL ONLY</text>
+              <text class="dg-sub" x="798" y="344">same files, plus /api</text>
+
+              <path class="dg-edge" d="M216 200 H272" marker-end="url(#dg-arrow-w)"/>
+              <path class="dg-edge" d="M376 96 V152" marker-end="url(#dg-arrow-w)"/>
+              <path class="dg-edge" d="M376 244 V292" marker-end="url(#dg-arrow-w)"/>
+              <path class="dg-edge" d="M476 332 H506 V222 H532" marker-end="url(#dg-arrow-w)"/>
+              <path class="dg-edge" d="M616 156 V100" marker-end="url(#dg-arrow-w)"/>
+              <path class="dg-edge" d="M656 96 V152" marker-end="url(#dg-arrow-w)"/>
+              <text class="dg-label" x="608" y="132" text-anchor="end">titles</text>
+              <text class="dg-label" x="664" y="132">scores</text>
+              <path class="dg-edge" d="M616 244 V292" marker-end="url(#dg-arrow-w)"/>
+              <path class="dg-edge" d="M656 296 V248" marker-end="url(#dg-arrow-w)"/>
+              <text class="dg-label" x="608" y="274" text-anchor="end">export</text>
+              <text class="dg-label" x="664" y="274">load</text>
+              <path class="dg-edge" d="M736 200 H780" marker-end="url(#dg-arrow-w)"/>
+              <path class="dg-edge" d="M884 156 V100" marker-end="url(#dg-arrow-w)"/>
+              <path class="dg-edge" d="M884 244 V292" marker-end="url(#dg-arrow-w)"/>
+            </svg>
+          </div>
+
+          <svg class="diagram-tall" viewBox="0 0 340 640" role="img" aria-labelledby="arch-t-title arch-t-desc">
+            <title id="arch-t-title">WHY architecture</title>
+            <desc id="arch-t-desc">From top to bottom: Google News RSS, then ingest with the quality filter, which also receives the backfill started by hand. Ingest writes raw JSONL on the data branch. DuckDB loads it, exchanges titles and scores with VADER and FinBERT, and loads and exports the Parquet history on the data branch. DuckDB builds the JSON exports, served by GitHub Pages and by a local Flask server.</desc>
+            <defs>
+              <marker id="dg-arrow-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                <path class="dg-arrow" d="M0 1 L9 5 L0 9 Z"/>
+              </marker>
+            </defs>
+
+            <rect class="dg-node" x="10" y="10" width="196" height="60" rx="2"/>
+            <text class="dg-title" x="22" y="34">GOOGLE NEWS RSS</text>
+            <text class="dg-sub" x="22" y="56">1 request per topic</text>
+
+            <rect class="dg-node" x="10" y="110" width="196" height="84" rx="2"/>
+            <text class="dg-title" x="22" y="134">INGEST</text>
+            <text class="dg-sub" x="22" y="156">parse, dedup, 8 per topic</text>
+            <rect class="dg-tag" x="22" y="166" width="118" height="20" rx="2"/>
+            <text class="dg-tag-text" x="81" y="180" text-anchor="middle">QUALITY FILTER</text>
+
+            <rect class="dg-node is-side" x="236" y="122" width="94" height="60" rx="2"/>
+            <text class="dg-title" x="246" y="146">BACKFILL</text>
+            <text class="dg-sub" x="246" y="168">by hand</text>
+
+            <rect class="dg-node is-store" x="10" y="230" width="196" height="60" rx="2"/>
+            <text class="dg-title" x="22" y="254">RAW JSONL</text>
+            <text class="dg-sub" x="22" y="276">on the data branch</text>
+
+            <rect class="dg-node" x="10" y="330" width="196" height="104" rx="2"/>
+            <text class="dg-title" x="22" y="354">DUCKDB</text>
+            <text class="dg-sub" x="22" y="376">in memory, plain SQL</text>
+            <text class="dg-sub" x="22" y="396">dedup key, quality flags</text>
+
+            <rect class="dg-node is-side" x="236" y="322" width="94" height="52" rx="2"/>
+            <text class="dg-title" x="246" y="344">VADER +</text>
+            <text class="dg-title" x="246" y="362">FINBERT</text>
+
+            <rect class="dg-node is-store" x="236" y="390" width="94" height="52" rx="2"/>
+            <text class="dg-title" x="246" y="412">PARQUET</text>
+            <text class="dg-sub" x="246" y="432">data branch</text>
+
+            <rect class="dg-node" x="10" y="470" width="320" height="60" rx="2"/>
+            <text class="dg-title" x="22" y="494">JSON EXPORTS</text>
+            <text class="dg-sub" x="22" y="516">latest, trends, model agreement, status</text>
+
+            <rect class="dg-node" x="10" y="570" width="150" height="60" rx="2"/>
+            <text class="dg-title" x="22" y="594">GITHUB PAGES</text>
+            <text class="dg-sub" x="22" y="616">this site</text>
+
+            <rect class="dg-node" x="180" y="570" width="150" height="60" rx="2"/>
+            <text class="dg-title" x="192" y="594">FLASK, LOCAL</text>
+            <text class="dg-sub" x="192" y="616">/data and /api</text>
+
+            <path class="dg-edge" d="M108 70 V106" marker-end="url(#dg-arrow-t)"/>
+            <path class="dg-edge" d="M236 152 H210" marker-end="url(#dg-arrow-t)"/>
+            <path class="dg-edge" d="M108 194 V226" marker-end="url(#dg-arrow-t)"/>
+            <path class="dg-edge" d="M108 290 V326" marker-end="url(#dg-arrow-t)"/>
+            <path class="dg-edge" d="M210 348 H232" marker-start="url(#dg-arrow-t)" marker-end="url(#dg-arrow-t)"/>
+            <path class="dg-edge" d="M210 416 H232" marker-start="url(#dg-arrow-t)" marker-end="url(#dg-arrow-t)"/>
+            <path class="dg-edge" d="M108 434 V466" marker-end="url(#dg-arrow-t)"/>
+            <path class="dg-edge" d="M85 530 V566" marker-end="url(#dg-arrow-t)"/>
+            <path class="dg-edge" d="M255 530 V566" marker-end="url(#dg-arrow-t)"/>
+          </svg>
+        </figure>
+
+        <ol class="steps" aria-label="The daily run, step by step">
+          <li><strong>Check out</strong> <code>main</code>, plus the <code>data</code> branch into <code>data/</code>.</li>
+          <li><strong>Backfill</strong> past days, only when the workflow is started by hand with <code>backfill_days</code> above 0.</li>
+          <li><strong>Run</strong>: one RSS request per topic, quality filter, raw JSONL, load into DuckDB, score what is missing, export Parquet and JSON.</li>
+          <li><strong>Compare</strong> VADER and FinBERT over the whole history.</li>
+          <li><strong>Commit</strong> the raw JSONL and Parquet files to the data branch.</li>
+          <li><strong>Deploy</strong> the frontend and the JSON exports to GitHub Pages.</li>
+        </ol>
+      </section>
+
+      <section class="block" id="ingest-block" aria-labelledby="ingest-title" hidden>
+        <div class="block-head">
+          <h2 class="block-title" id="ingest-title">Daily ingest</h2>
+          <p class="block-note" id="ingest-note"></p>
+        </div>
+        <div id="ingest"></div>
+      </section>
+
+      <div class="split">
+        <section class="block" id="history-block" aria-labelledby="history-title" hidden>
+          <div class="block-head">
+            <h2 class="block-title" id="history-title">History</h2>
+            <p class="block-note" id="history-note"></p>
+          </div>
+          <div id="history"></div>
+        </section>
+
+        <section class="block" id="sources-block" aria-labelledby="sources-title" hidden>
+          <div class="block-head">
+            <h2 class="block-title" id="sources-title">Top sources</h2>
+            <p class="block-note" id="sources-note"></p>
+          </div>
+          <div id="sources"></div>
+        </section>
+      </div>
+
+      <section class="block" aria-labelledby="links-title">
+        <div class="block-head">
+          <h2 class="block-title" id="links-title">Go deeper</h2>
+          <p class="block-note">Everything above is public: the runs, the data and the reasoning.</p>
+        </div>
+        <ul class="link-grid">
+          <li>
+            <a class="text-link" href="https://github.com/Onodera-Gustavo/W-H-Y/actions/workflows/pipeline.yml" target="_blank" rel="noopener noreferrer">Pipeline runs</a>
+            <p>Every scheduled and manual run on GitHub Actions, with its logs.</p>
+          </li>
+          <li>
+            <a class="text-link" href="https://github.com/Onodera-Gustavo/W-H-Y/tree/data" target="_blank" rel="noopener noreferrer">The data branch</a>
+            <p>Raw JSONL and the Parquet history, one commit per run.</p>
+          </li>
+          <li>
+            <a class="text-link" href="https://github.com/Onodera-Gustavo/W-H-Y#decisions-and-trade-offs" target="_blank" rel="noopener noreferrer">Design decisions</a>
+            <p>Why DuckDB and Parquet, two models, a quality filter and a static site.</p>
+          </li>
+          <li>
+            <a class="text-link" href="data/status.json">status.json</a>
+            <p>The report this page reads.</p>
+          </li>
+        </ul>
+      </section>
+    </div>
+
+    <noscript>
+      <div class="wrap">
+        <p class="state-detail">WHY needs JavaScript to read the run status. The raw export is at <a href="data/status.json">data/status.json</a>.</p>
+      </div>
+    </noscript>
+  </main>
+
+  <footer class="site-footer" id="site-footer"></footer>
+</body>
+</html>

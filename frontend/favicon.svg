@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    .tile { fill: #fafaf8; }
+    .mark { fill: none; stroke: #181816; }
+    .rule { fill: #181816; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #121210; }
+      .mark { stroke: #edece6; }
+      .rule { fill: #edece6; }
+    }
+  </style>
+  <rect class="tile" width="64" height="64" rx="12"/>
+  <!-- the outlined W of the masthead, drawn as a path so it does not depend on a font -->
+  <path class="mark" stroke-width="3.6" stroke-linejoin="miter"
+        d="M7 10h10l3.6 25.5L27 12h10l6.4 23.5L47 10h10l-8 38H38.5L32 25l-6.5 23H15z"/>
+  <rect class="rule" x="7" y="53" width="50" height="3"/>
+</svg>

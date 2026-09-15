@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Model Lab | WHY: What Happened Yesterday</title>
+  <meta name="description" content="How often VADER and FinBERT agree on market headlines: percent agreement, Cohen's kappa, a confusion matrix, a score scatter and the headlines they read differently.">
+  <link rel="canonical" href="https://onodera-gustavo.github.io/W-H-Y/models.html">
+  <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121210" media="(prefers-color-scheme: dark)">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="WHY">
+  <meta property="og:title" content="Model Lab | WHY: What Happened Yesterday">
+  <meta property="og:description" content="How often VADER and FinBERT agree on market headlines, and where they part ways.">
+  <meta property="og:url" content="https://onodera-gustavo.github.io/W-H-Y/models.html">
+  <meta property="og:image" content="https://onodera-gustavo.github.io/W-H-Y/assets/img/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The WHY masthead above a strip of six topic cells, each with a sentiment meter and a trend line.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Model Lab | WHY: What Happened Yesterday">
+  <meta name="twitter:description" content="How often VADER and FinBERT agree on market headlines, and where they part ways.">
+  <meta name="twitter:image" content="https://onodera-gustavo.github.io/W-H-Y/assets/img/og.png">
+  <meta name="twitter:image:alt" content="The WHY masthead above a strip of six topic cells, each with a sentiment meter and a trend line.">
+
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+  <link rel="stylesheet" href="assets/css/why.css">
+  <script src="assets/js/theme-boot.js"></script>
+  <script type="module" src="assets/js/models.js"></script>
+</head>
+
+<body data-page="models">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" id="site-header">
+    <div class="wrap">
+      <div class="masthead">
+        <p class="masthead-title">WHY</p>
+        <p class="masthead-sub">What Happened Yesterday</p>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="wrap" aria-labelledby="page-title">
+      <div class="page-head">
+        <p class="kicker">Two models, one headline</p>
+        <h1 class="page-title" id="page-title">Model Lab</h1>
+        <p class="page-lede">Every headline gets a label from VADER, a word list built for social media, and from FinBERT, a language model trained on financial news. This page checks how often they agree, where they part ways, and which headlines they read differently.</p>
+        <p class="page-note" id="lab-note">Computed by why compare over the whole history.</p>
+      </div>
+    </section>
+
+    <div class="wrap">
+      <div id="lab-state"></div>
+
+      <div id="lab-body" hidden>
+        <section aria-label="Agreement at a glance">
+          <div class="kpis" id="kpis"></div>
+        </section>
+
+        <div class="lab-grid">
+          <section class="block" aria-labelledby="cm-title">
+            <div class="block-head">
+              <h2 class="block-title" id="cm-title">Confusion matrix</h2>
+              <p class="block-note" id="cm-note"></p>
+            </div>
+            <div id="cm"></div>
+          </section>
+
+          <section class="block" aria-labelledby="dist-title">
+            <div class="block-head">
+              <h2 class="block-title" id="dist-title">Label distribution</h2>
+              <p class="block-note" id="dist-note"></p>
+            </div>
+            <div id="dist"></div>
+          </section>
+        </div>
+
+        <div class="lab-grid">
+          <section class="block" aria-labelledby="scatter-title">
+            <div class="block-head">
+              <h2 class="block-title" id="scatter-title">Score against score</h2>
+              <p class="block-note" id="scatter-note"></p>
+            </div>
+            <div id="scatter"></div>
+          </section>
+
+          <section class="block" aria-labelledby="topic-title">
+            <div class="block-head">
+              <h2 class="block-title" id="topic-title">Agreement by topic</h2>
+              <p class="block-note" id="topic-note"></p>
+            </div>
+            <div id="by-topic"></div>
+          </section>
+        </div>
+
+        <section class="block" aria-labelledby="dis-title">
+          <div class="block-head">
+            <h2 class="block-title" id="dis-title">Where they disagree</h2>
+            <p class="block-note" id="dis-note"></p>
+          </div>
+          <div id="dis"></div>
+        </section>
+      </div>
+
+      <section class="block" aria-labelledby="explain-title">
+        <div class="block-head">
+          <h2 class="block-title" id="explain-title">How to read this page</h2>
+          <p class="block-note">Three things worth knowing before trusting any number above.</p>
+        </div>
+        <div class="explain">
+          <section aria-labelledby="explain-accuracy">
+            <h3 class="kicker" id="explain-accuracy">Agreement is not accuracy</h3>
+            <p>There are no human labels behind this page. When both models give a headline the same label, both can still be wrong; when they differ, either one can be right.</p>
+            <p>Agreement says how interchangeable the two models are, not how good either one is. Measuring accuracy needs a hand-labeled sample, which is on the roadmap.</p>
+          </section>
+          <section aria-labelledby="explain-vader">
+            <h3 class="kicker" id="explain-vader">Why VADER misreads finance</h3>
+            <p>VADER adds up the tone of single words from a list written for social media. Market headlines carry their meaning in phrases: in the project's own checks it scores <q>Earnings beat estimates</q> as neutral and <q>Shares fall short of expectations</q> as positive.</p>
+            <p>FinBERT was fine-tuned on sentences from financial news, so it reads those phrases in context. Its score is the probability of positive minus the probability of negative.</p>
+          </section>
+          <section aria-labelledby="explain-kappa">
+            <h3 class="kicker" id="explain-kappa">Reading kappa</h3>
+            <p>Two models that call most headlines neutral agree often by luck alone. Cohen's kappa removes that luck: 0 means no better than chance and 1 means perfect agreement.</p>
+            <p>The words follow Landis and Koch (1977): below 0 poor, up to 0.20 slight, 0.21 to 0.40 fair, 0.41 to 0.60 moderate, 0.61 to 0.80 substantial, and above 0.80 almost perfect.</p>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <noscript>
+      <div class="wrap">
+        <p class="state-detail">WHY needs JavaScript to draw the Model Lab. The raw export is at <a href="data/model_agreement.json">data/model_agreement.json</a>.</p>
+      </div>
+    </noscript>
+  </main>
+
+  <footer class="site-footer" id="site-footer"></footer>
+</body>
+</html>
