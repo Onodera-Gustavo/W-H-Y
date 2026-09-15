@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "0 9 * * *" # every day at 09:00 UTC
   workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: "Backfill this many past days before the run (0 to 60, about 6 requests per day; 0 = no backfill)"
+        required: false
+        default: "0"
+        type: string
 
 permissions:
   contents: read
@@ -19,8 +25,13 @@ env:
 jobs:
   run:
     runs-on: ubuntu-latest
+    # a 60 day backfill is about 360 requests 3 seconds apart, plus FinBERT on CPU
+    timeout-minutes: 60
     permissions:
       contents: write # push raw data and history to the data branch
+    env:
+      # empty on scheduled runs; passed through env, never pasted into a script
+      BACKFILL_DAYS: ${{ inputs.backfill_days || '0' }}
     steps:
       - name: Check out main
         uses: actions/checkout@v7
@@ -54,6 +65,21 @@ jobs:
           path: ~/.cache/huggingface
           key: huggingface-${{ runner.os }}-prosusai-finbert-v1
 
+      - name: Backfill past days
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          case "$BACKFILL_DAYS" in
+            ''|*[!0-9]*)
+              echo "::error::backfill_days must be a whole number from 0 to 60, got '$BACKFILL_DAYS'"
+              exit 1
+              ;;
+          esac
+          if [ "$BACKFILL_DAYS" -gt 0 ]; then
+            python -m why backfill --days "$BACKFILL_DAYS" --models vader,finbert
+          else
+            echo "backfill_days is 0: nothing to backfill"
+          fi
+
       - name: Run the pipeline
         run: python -m why run --models vader,finbert
 
@@ -70,14 +96,19 @@ jobs:
             echo "No data changes to commit"
             exit 0
           fi
-          git commit -m "data: pipeline run $(date -u +%Y-%m-%d)"
+          message="data: pipeline run $(date -u +%Y-%m-%d)"
+          if [ "$BACKFILL_DAYS" != "0" ]; then
+            message="$message, backfill of $BACKFILL_DAYS days"
+          fi
+          git commit -m "$message"
           cd "$GITHUB_WORKSPACE"
           git push origin data
 
       - name: Build the site
         run: |
-          cp frontend/index.html frontend/style.css site/
-          ls -la site site/data
+          # every page and asset of the frontend, next to the JSON exports in site/data
+          cp -R frontend/. site/
+          find site -type f | sort
 
       - uses: actions/upload-pages-artifact@v5
         with:
@@ -86,6 +117,7 @@ jobs:
   deploy:
     needs: run
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       pages: write
       id-token: write
